@@ -9,85 +9,66 @@ exports.aliasTopTours = (req, res, next) => {
   next();
 };
 
-// const tours = JSON.parse(
-//   fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`)
-// );
+class APIfeatures {
+  constructor(query, queryString) {
+    this.query = query;
+    this.queryString = queryString;
+  }
 
-// exports.checkID = (req, res, next, val) => {
-//   console.log(`Tour id is: ${val}`);
-
-//   if (req.params.id * 1 > tours.length) {
-//     return res.status(404).json({
-//       status: 'fail',
-//       message: 'Invalid ID'
-//     });
-//   }
-//   next();
-// };
-
-// exports.checkBody = (req, res, next) => {
-//   if (!req.body.name || !req.body.price) {
-//     return res.status(400).json({
-//       status: 'fail',
-//       message: 'Missing name or price'
-//     });
-//   }
-//   next();
-// };
-
-exports.getAllTours = async (req, res) => {
-  try {
-    //1) Filtering
-    // console.log(req.query);
-    const queryobj = { ...req.query };
+  filter() {
+    const queryobj = { ...this.queryString };
     const excludedFiles = ["page", "sort", "limit", "fields"];
     excludedFiles.forEach((el) => delete queryobj[el]);
-    // console.log(queryobj);
-
     //2) Advanced filtering
     let queryStr = JSON.stringify(queryobj);
     queryStr = queryStr.replace(/\b(gte|gt|lt|lte)\b/g, (match) => `$${match}`);
-    console.log(JSON.parse(queryStr));
 
-    // use let to sort in next step
-    let query = Tour.find(JSON.parse(queryStr));
-    // const query = Tour.find({
-    //   difficulty: "easy",
-    //   duration: 5
-    // });
+    this.query.find(JSON.parse(queryStr));
 
-    //3) Sorting
+    return this;
+  }
 
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(",").join(" ");
-      query = query.sort(sortBy);
+  sort() {
+    if (this.queryString.sort) {
+      const sortBy = thhis.queryString.sort.split(",").join(" ");
+      this.query = this.query.sort(sortBy);
     } else {
-      query = query.sort("-ratingsAverage");
+      this.query = this.query.sort("-ratingsAverage");
     }
 
-    //4) Field limiting
+    return this;
+  }
 
-    if (req.query.fields) {
-      const fields = req.query.fields.split(",").join(" ");
-      query = query.select(fields);
+  limitFields() {
+    if (this.queryString.fields) {
+      const fields = this.queryString.fields.split(",").join(" ");
+      this.query = this.query.select(fields);
     } else {
-      query = query.select("-__v");
+      this.query = this.query.select("-__v");
     }
 
-    //5) Pagination
+    return this;
+  }
 
-    const page = req.query.page * 1 || 1;
-    const limit = req.query.limit * 1 || 100;
+  paging() {
+    const page = this.queryString.page * 1 || 1;
+    const limit = this.queryString.limit * 1 || 100;
     const skip = (page - 1) * limit;
 
-    if (req.query.page) {
-      const numTours = await Tour.countDocuments();
-      if (skip >= numTours) throw new Error("This page does not exist");
-    }
+    this.query = this.query.skip(skip).limit(limit);
 
-    query = query.skip(skip).limit(limit);
+    return this;
+  }
+}
 
-    const tours = await query;
+exports.getAllTours = async (req, res) => {
+  try {
+    const features = new APIfeatures(Tour.find(), req.query)
+      .filter()
+      .sort()
+      .limitFields()
+      .paging();
+    const tours = await features.query;
 
     res.status(200).json({
       status: "success",
